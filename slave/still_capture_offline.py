@@ -309,8 +309,10 @@ def capture_still_image():
         picam2 = Picamera2()
         
         # SIMPLE configuration - no complex controls
+        # FIXED: Add raw parameter to force full sensor usage (prevents letterboxing)
         still_config = picam2.create_still_configuration(
-            main={"size": (2592, 1944)}  # High resolution only
+            main={"size": (2592, 1944)},  # High resolution only
+            raw={"size": (4608, 2592)}    # Force full HQ sensor - prevents letterbox crop
         )
         
         picam2.configure(still_config)
