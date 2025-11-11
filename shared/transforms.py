@@ -229,6 +229,60 @@ def apply_crop_rgb(image, settings):
         logging.error(f"[CROP] Error: {e}")
         return image
 
+def apply_crop_scaled_for_still(image, settings):
+    """
+    WYSIWYG FIX: Apply crop with resolution scaling for still captures
+    
+    Crop coordinates are set based on video preview resolution (e.g., 640x480)
+    but still captures are at full sensor resolution (4608x2592).
+    This function scales crop coordinates proportionally to match the resolution difference.
+    """
+    try:
+        # Get crop settings (these are in video resolution coordinates)
+        crop_x = max(0, settings.get('crop_x', 0))
+        crop_y = max(0, settings.get('crop_y', 0))
+        crop_w = settings.get('crop_width', 4608)
+        crop_h = settings.get('crop_height', 2592)
+        
+        # Get video resolution (what user sees in preview)
+        video_res_str = settings.get('resolution', '640x480')
+        try:
+            video_width, video_height = map(int, video_res_str.split('x'))
+        except:
+            video_width, video_height = 640, 480  # Fallback
+        
+        # Get actual still image dimensions
+        still_height, still_width = image.shape[:2]
+        
+        # Calculate scale factors
+        scale_x = still_width / video_width
+        scale_y = still_height / video_height
+        
+        # Scale crop coordinates from video resolution to still resolution
+        scaled_x = int(crop_x * scale_x)
+        scaled_y = int(crop_y * scale_y)
+        scaled_w = int(crop_w * scale_x)
+        scaled_h = int(crop_h * scale_y)
+        
+        # Validate and clamp to image bounds
+        scaled_x = max(0, min(scaled_x, still_width - 100))
+        scaled_y = max(0, min(scaled_y, still_height - 100))
+        scaled_w = max(100, min(scaled_w, still_width - scaled_x))
+        scaled_h = max(100, min(scaled_h, still_height - scaled_y))
+        
+        logging.info(f"[CROP_SCALED] WYSIWYG scaling applied:")
+        logging.info(f"[CROP_SCALED]   Video res: {video_width}x{video_height}, Still res: {still_width}x{still_height}")
+        logging.info(f"[CROP_SCALED]   Scale factors: X={scale_x:.2f}, Y={scale_y:.2f}")
+        logging.info(f"[CROP_SCALED]   Original crop: x={crop_x}, y={crop_y}, w={crop_w}, h={crop_h}")
+        logging.info(f"[CROP_SCALED]   Scaled crop: x={scaled_x}, y={scaled_y}, w={scaled_w}, h={scaled_h}")
+        
+        return image[scaled_y:scaled_y+scaled_h, scaled_x:scaled_x+scaled_w]
+        
+    except Exception as e:
+        logging.error(f"[CROP_SCALED] Error: {e}, falling back to unscaled crop")
+        # Fallback to regular crop if scaling fails
+        return apply_crop_rgb(image, settings)
+
 def apply_rotation_rgb(image, degrees):
     """Apply rotation while maintaining RGB format"""
     try:
@@ -279,9 +333,9 @@ def apply_unified_transforms_for_still(image_array, device_name):
         
         # Apply identical transforms as video (but in BGR format)
         
-        # Step 1: Crop
+        # Step 1: Crop (WYSIWYG FIX: Scale coordinates from video resolution to still resolution)
         if settings.get('crop_enabled', False):
-            image = apply_crop_rgb(image, settings)  # Works same for BGR
+            image = apply_crop_scaled_for_still(image, settings)  # Scales crop for resolution difference
         
         # Step 2: Rotation
         rotation = settings.get('rotation', 0)
