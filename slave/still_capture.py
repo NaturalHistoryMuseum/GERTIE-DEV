@@ -245,8 +245,10 @@ def capture_with_processing(filename):
         picam2 = Picamera2()
         
         # Configure for maximum resolution still - SIMPLE like working slave201
+        # FIXED: Add raw parameter to force full sensor usage (prevents letterboxing)
         still_config = picam2.create_still_configuration(
-            main={"size": (4608, 2592)}  # Full sensor resolution - NO CONTROLS like rep8
+            main={"size": (4608, 2592)},  # Full sensor resolution
+            raw={"size": (4608, 2592)}    # Force full HQ sensor - prevents letterbox crop
         )
         picam2.configure(still_config)
         picam2.start()
