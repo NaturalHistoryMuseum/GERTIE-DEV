@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gertie-camera-system"
+version = "2.0.0"
+description = "GERTIE Multi-Camera System for Raspberry Pi"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    {name = "GERTIE Team"},
+]
+
+dependencies = [
+    "numpy~=1.24.0",
+    "opencv-python~=4.8.0",
+    "Pillow~=10.0.0",
+    "PyQt5~=5.15.0",
+    "pyqtgraph~=0.13.0",
+]
+
+[project.optional-dependencies]
+rpi = [
+    "picamera2~=0.3.0",
+    "RPi.GPIO~=0.7.0",
+]
+dev = [
+    "ruff~=0.1.0",
+    "pre-commit~=3.5.0",
+    "pytest~=7.4.0",
+    "coverage~=7.3.0",
+]
+
+ansible = [
+    "ansible-core~=2.15.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["master*", "slave*", "shared*", "gertie*"]
+exclude = ["tests*", "docs*"]
+
+[tool.coverage.run]
+source = ["master", "slave", "shared", "gertie"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/test_*.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]

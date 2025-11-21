@@ -1,0 +1,35 @@
+# Ruff configuration for GERTIE project
+# Combines linting and formatting (replaces Black + Flake8)
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+# Include/exclude patterns
+include = ["*.py"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".venv",
+    "venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "W",  # pycodestyle warnings
+    "I",  # isort
+    "N",  # pep8-naming
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "F401",  # unused imports (fix gradually)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
