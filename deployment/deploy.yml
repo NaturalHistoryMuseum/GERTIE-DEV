@@ -1,0 +1,54 @@
+---
+# GERTIE Deployment Playbook - Supplements sync_to_slaves.sh
+# Usage: ansible-playbook -i inventory.ini deploy.yml
+# Note: This does NOT replace sync_to_slaves.sh - use that for primary deployment
+
+- name: GERTIE Node Deployment (Supplement)
+  hosts: nodes
+  gather_facts: yes
+  vars:
+    feature_flags:
+      USE_NEW_GERTIE: false
+      USE_UNIFIED_CONFIG: false
+      USE_JSONRPC: false
+      USE_ANSIBLE: false
+      USE_WEBSOCKETS: false
+
+  tasks:
+    - name: Check if sync_to_slaves.sh was run
+      stat:
+        path: "{{ gertie_base_dir }}/slave"
+      register: slave_dir
+      
+    - name: Warn if primary deployment not done
+      debug:
+        msg: "WARNING: Run sync_to_slaves.sh first for primary deployment"
+      when: not slave_dir.stat.exists
+    
+    - name: Ensure base directory exists
+      file:
+        path: "{{ gertie_base_dir }}"
+        state: directory
+        mode: '0755'
+
+    
+    - name: Create feature flag file
+      copy:
+        content: |
+          # GERTIE Feature Flags - Managed by Ansible
+          export USE_NEW_GERTIE={{ feature_flags.USE_NEW_GERTIE | lower }}
+          export USE_UNIFIED_CONFIG={{ feature_flags.USE_UNIFIED_CONFIG | lower }}
+          export USE_JSONRPC={{ feature_flags.USE_JSONRPC | lower }}
+          export USE_ANSIBLE={{ feature_flags.USE_ANSIBLE | lower }}
+          export USE_WEBSOCKETS={{ feature_flags.USE_WEBSOCKETS | lower }}
+        dest: "{{ gertie_base_dir }}/.feature_flags"
+        mode: '0644'
+    
+    - name: Check Python dependencies
+      command: python3 -m pip list
+      register: pip_list
+      changed_when: false
+    
+    - name: Report deployment status
+      debug:
+        msg: "Node {{ inventory_hostname }} supplemental config complete"
