@@ -1,0 +1,1 @@
+"""GERTIE Node Package - Camera Node Implementation"""
