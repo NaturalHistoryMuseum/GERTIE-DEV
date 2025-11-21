@@ -1,161 +1,132 @@
 # DEPLOYMENT via sync_to_slaves.sh ONLY
 
-Date: 2025-10-15 15:15:00
-Commit: e37e3f5 Fix: Aggressive network-side frame dropping to prevent GUI saturation
+Date: 2025-11-11
+Commits: 
+  - d100864 Fix: Add raw sensor parameter to prevent letterbox cropping in still captures
+  - 1f59acd Sync: Add raw sensor parameter to still_capture_offline.py (prevents letterboxing)
+  - a826026 Fix: WYSIWYG crop scaling - scale crop coordinates from video resolution to still resolution
 
-## MANDATORY STEPS (NO ALTERNATIVES):
-1. Copy camera_system_integrated_final to USB
-2. On control1: cp -r /media/USB/camera_system_integrated_final /home/andrc1/
-3. cd /home/andrc1/camera_system_integrated_final
-4. ./sync_to_slaves.sh
-5. ./run_gui_with_logging.sh
-6. Execute CRITICAL TEST PROTOCOL (below)
-7. cp /home/andrc1/Desktop/updatelog.txt /media/USB/
-8. Return updatelog.txt to MacBook
+## TWO CRITICAL FIXES FOR IMAGE CAPTURE
 
-## WHAT WAS FIXED:
+### FIX #1: LETTERBOX CROPPING RESOLVED
 
-**ROOT CAUSE IDENTIFIED**:
-- Slaves were transmitting at full 30 FPS (8 cameras × 30 = 240 fps total)
-- Network thread received and resized ALL 240 frames/second
-- GUI thread attempted to process ~24 PhotoImage operations/second
-- Tkinter single-threaded event loop COULD NOT handle this load
-- Result: GUI lag, sluggish responsiveness, frame skipping
+**Problem Fixed:**
+Final captured images had black bars (letterboxing) at top/bottom.
 
-**SOLUTION IMPLEMENTED (Commit e37e3f5)**:
-- Added aggressive time-based frame dropping on NETWORK THREAD
-- Drops frames BEFORE decode/resize (saves CPU)
-- Grid mode: Target 1 fps per camera (1000ms interval)
-- Exclusive mode: Target 15 fps (67ms interval)
-- Expected: 8 cameras × 1 fps = 8 GUI operations/second (vs 24/second)
+**Root Cause:**
+- Picamera2 create_still_configuration() was missing `raw` parameter
+- Without explicit sensor config, Picamera2 auto-selected sensor mode
+- Auto-selected mode caused letterboxing when scaled to requested resolution
 
-**TECHNICAL CHANGES**:
-File: master/camera_gui/core/network_manager.py
-- Line 43: Added last_frame_time tracking dictionary
-- Lines 198-210: Time-based frame gating with early drop
-- Logic: if (time_since_last < min_interval): DROP immediately
-- Result: Dramatic reduction in CPU waste and GUI pressure
+**Solution Applied:**
+Added `raw={"size": (4608, 2592)}` to force full HQ sensor usage in:
+- slave/still_capture.py (line 247-252)
+- slave/still_capture_offline.py (line 311-316)
 
-## EXPECTED RESULT:
+This matches the working pattern from video_stream.py.
 
-**Grid Mode Performance**:
-- Smooth 1 FPS display per camera (stable, consistent)
-- GUI responds instantly to mouse movement
-- Button clicks register immediately
-- No freezing or stuttering during frame updates
-- Cursor moves smoothly across interface
+### FIX #2: WYSIWYG CROP SYNCHRONIZATION
 
-**Exclusive Mode Performance**:
-- Smooth 15 FPS for focused camera
-- Instant mode switching (grid ↔ exclusive)
-- No lag when selecting different cameras
+**Problem Fixed:**
+Crop adjustments in video preview didn't match the crop in final captured still images.
 
-**Frame Statistics**:
-- Should see MASSIVELY increased "frames skipped" count (this is GOOD)
-- Skipped frames = wasted processing prevented
-- Lower received frame count = network thread working efficiently
-- Consistent FPS metrics (1.0 fps in grid, ~15 fps exclusive)
+**Root Cause:**
+- Video stream preview: 640x480 resolution (user adjusts crop based on this)
+- Still capture: 4608x2592 resolution (full sensor)
+- Crop coordinates designed for 640x480 were applied directly to 4608x2592
+- Result: Wrong crop region in still images (not matching preview)
 
-## CRITICAL TEST PROTOCOL:
+**Solution Applied:**
+Added resolution-aware crop scaling in shared/transforms.py:
+- New function: apply_crop_scaled_for_still() (lines 231-283)
+- Calculates scale factors: X = 4608/640 = 7.2, Y = 2592/480 = 5.4
+- Scales crop coordinates proportionally before applying
+- Result: What you see in preview = what you get in capture (WYSIWYG)
 
-### TEST A: Grid Mode Responsiveness (60 seconds)
-1. Launch GUI with all 8 cameras
-2. Let grid stabilize for 10 seconds
-3. Move mouse cursor rapidly around GUI
-4. Click between different cameras 10 times
-5. Observe: Cursor should move smoothly, clicks instant, no GUI freeze
+**Example:**
+- User sees crop at x=100, y=50, w=400, h=300 in 640x480 preview
+- System now scales to x=720, y=270, w=2880, h=1620 for 4608x2592 capture
+- Final image matches preview exactly
 
-**SUCCESS CRITERIA**:
-✓ Mouse cursor moves smoothly without stuttering
-✓ Button clicks register within 100ms
-✓ No visible frame freezing
-✓ All 8 feeds updating at stable 1 fps
+## MANDATORY DEPLOYMENT STEPS (NO ALTERNATIVES):
 
-### TEST B: Exclusive Mode Performance (30 seconds)
-1. Enter exclusive mode for rep1
-2. Move mouse around, click buttons
-3. Switch to rep2 exclusive, repeat
-4. Switch to rep3 exclusive, repeat
-5. Return to grid mode
+1. Copy camera_system_integrated_final to USB drive
+   
+2. On control1 Pi:
+   cp -r /media/USB/camera_system_integrated_final /home/andrc1/
+   
+3. Navigate to project:
+   cd /home/andrc1/camera_system_integrated_final
+   
+4. Deploy to all cameras:
+   ./sync_to_slaves.sh
+   
+5. Start system:
+   ./run_gui_with_logging.sh
+   
+6. Test BOTH fixes:
+   
+   **Test A - Letterboxing Fix:**
+   - Capture still images from multiple cameras
+   - Verify images are full frame (4608x2592)
+   - Verify NO letterboxing (no black bars)
+   - Check captured_images folder on each Pi
+   
+   **Test B - WYSIWYG Crop:**
+   - Enable crop in GUI
+   - Adjust crop rectangle in video preview
+   - Capture still image
+   - Verify captured image has EXACT same crop as preview
+   - Try different crop positions/sizes
+   
+7. Collect logs:
+   cp /home/andrc1/Desktop/updatelog.txt /media/USB/
+   
+8. Return updatelog.txt to MacBook for analysis
 
-**SUCCESS CRITERIA**:
-✓ Exclusive view shows smooth 15 fps
-✓ Mode switching is instant (<200ms)
-✓ GUI remains responsive throughout
+## Expected Results:
 
-### TEST C: Still Capture Stress Test (5 captures)
-1. In grid mode, trigger "Capture All" 5 times
-2. Wait 3 seconds between captures
-3. Observe GUI during capture operations
+**Letterboxing Fix:**
+- Still captures use full sensor (4608x2592)
+- No letterboxing or black bars
+- Images fill entire frame
+- All 8 cameras capture correctly
 
-**SUCCESS CRITERIA**:
-✓ GUI stays responsive during captures
-✓ Frame updates continue smoothly
-✓ No lag or freeze during disk writes
-✓ All 8 cameras save successfully
+**WYSIWYG Crop:**
+- Preview shows exact crop that will be captured
+- Crop coordinates scale properly from video to still resolution
+- What you see = what you get (WYSIWYG)
+- Consistent cropping across all cameras
 
-### TEST D: Extended Runtime (3 minutes)
-1. Leave GUI running in grid mode for 3 minutes
-2. Periodically move mouse and click buttons
-3. Monitor frame statistics in updatelog.txt
+## Technical Details:
 
-**SUCCESS CRITERIA**:
-✓ Consistent 1.0 fps per camera throughout
-✓ High frame skip percentage (80-90% is GOOD)
-✓ No performance degradation over time
-✓ GUI remains responsive for full duration
+**Fix #1 (Letterboxing):**
+Before:
+  still_config = picam2.create_still_configuration(
+      main={"size": (4608, 2592)}
+  )
 
-## PERFORMANCE METRICS TO VERIFY:
+After:
+  still_config = picam2.create_still_configuration(
+      main={"size": (4608, 2592)},
+      raw={"size": (4608, 2592)}  # Force full sensor
+  )
 
-In updatelog.txt, look for:
-- **Grid FPS**: Should be stable ~1.0 fps per camera
-- **Frames Skipped**: Should be 80-90% (this is GOOD - means dropping works)
-- **Exclusive FPS**: Should be ~15 fps when in exclusive mode
-- **GUI Responsiveness**: No "lag" reports in user testing
+**Fix #2 (WYSIWYG Crop):**
+Before:
+  # Applied video crop coords directly to still (WRONG!)
+  image = apply_crop_rgb(image, settings)
 
-## COMPARISON WITH PREVIOUS DEPLOYMENT:
-
-**Previous Results (Commit 01cdd66)**:
-- Grid FPS: 1.9-3.3 fps (unstable)
-- Frames skipped: 2.3% overall (TOO LOW - not dropping enough)
-- User report: "still lag across all tests"
-- Problem: GUI saturated with too many operations
-
-**Expected with This Fix (Commit e37e3f5)**:
-- Grid FPS: 1.0 fps (stable, controlled)
-- Frames skipped: 80-90% (GOOD - aggressive dropping working)
-- User report: Should be smooth, responsive
-- Solution: GUI receives only necessary frames
-
-## WHY THIS SHOULD WORK:
-
-**Before**: 240 fps received → 240 resizes → ~24 GUI updates → LAG
-**After**: 240 fps received → 8 kept (232 dropped early) → 8 resizes → 8 GUI updates → SMOOTH
-
-The key insight: We don't need 30 fps previews. 1 fps is PLENTY for monitoring 8 cameras. By dropping aggressively at the network thread (before any processing), we:
-1. Save massive CPU cycles (no decode/resize for dropped frames)
-2. Reduce GUI thread pressure from 24 ops/sec to 8 ops/sec
-3. Keep event loop responsive for user input
-4. Maintain stable, predictable frame rates
+After:
+  # Scale crop coordinates for resolution difference
+  scale_x = still_width / video_width  # e.g., 4608/640 = 7.2
+  scale_y = still_height / video_height  # e.g., 2592/480 = 5.4
+  scaled_x = crop_x * scale_x
+  scaled_y = crop_y * scale_y
+  # ... apply scaled crop
 
 ## DO NOT:
 - Use any other deployment method
-- Run individual scp commands
+- Run individual scp commands  
 - Modify sync_to_slaves.sh
-- Expect smooth 30 fps previews (not the goal)
-- Worry about high frame skip percentage (that's the fix working)
-
-## IF TESTING FAILS:
-
-If lag persists after this deployment:
-1. Verify frame skip percentage is 80-90% (proves dropping is working)
-2. Check GUI thread is receiving only ~8 frames/second
-3. If still lagging, bottleneck is PhotoImage.put() itself
-4. Next step would be: Switch from Tkinter to PyQt/OpenGL for rendering
-5. Copy updatelog.txt and report specific symptoms
-
----
-**DEPLOYMENT PACKAGE**: camera_system_integrated_final
-**DEPLOYMENT METHOD**: sync_to_slaves.sh (MANDATORY)
-**CRITICAL FIX**: Network-side frame dropping prevents GUI saturation
-**EXPECTED OUTCOME**: Smooth, responsive GUI with stable 1 fps grid display
+- Skip testing steps (both fixes need verification)
