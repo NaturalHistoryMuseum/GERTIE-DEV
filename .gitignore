@@ -41,3 +41,4 @@ session_log.txt
 master/camera_master.log
 master/camera_master_gui.log
 master/master_debug.log
+.coverage
