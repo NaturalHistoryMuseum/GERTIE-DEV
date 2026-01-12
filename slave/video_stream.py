@@ -521,12 +521,32 @@ def handle_video_commands():
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     
     try:
-        local_ip = socket.gethostbyname(socket.gethostname())
+        # FIXED: Use reliable IP detection (ip addr show) instead of gethostbyname
+        # gethostbyname returns 127.0.1.1 from /etc/hosts, causing wrong port selection
+        local_ip = None
+        try:
+            result = subprocess.run(['ip', 'addr', 'show'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if 'inet 192.168.0.2' in line:
+                        parts = line.strip().split()
+                        for part in parts:
+                            if part.startswith('192.168.0.2') and '/' in part:
+                                local_ip = part.split('/')[0]
+                                break
+                        if local_ip:
+                            break
+        except Exception:
+            pass
+        
+        if not local_ip:
+            local_ip = "192.168.0.200"  # Fallback to master/local
+            
         ports = get_slave_ports(local_ip)
         video_control_port = ports['video_control']
         
         sock.bind(("0.0.0.0", video_control_port))
-        logging.info(f"[VIDEO] Command handler for {device_name} on port {video_control_port}")
+        logging.info(f"[VIDEO] Command handler for {device_name} on port {video_control_port} (IP: {local_ip})")
     except OSError as e:
         logging.error(f"[VIDEO] Failed to bind port for {device_name}: {e}")
         return
