@@ -51,7 +51,8 @@ LOCAL_IMAGE_DIR = "captured_images_local"
 
 def get_slave_ports(slave_ip):
     """Get the appropriate ports for a slave based on IP"""
-    if slave_ip == "127.0.0.1":  # Local camera
+    # Local camera: either 127.0.0.1 OR the master IP (192.168.0.200)
+    if slave_ip == "127.0.0.1" or slave_ip == MASTER_IP:
         return {
             'control': LOCAL_CONTROL_PORT,
             'video': LOCAL_VIDEO_PORT,

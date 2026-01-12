@@ -36,7 +36,8 @@ except ImportError as e:
     # Fallback get_slave_ports function
     def get_slave_ports(ip: str):
         """Fallback function to get slave ports"""
-        if ip == "127.0.0.1" or ip.startswith("127."):
+        # Local camera: 127.0.0.1 OR master IP (192.168.0.200)
+        if ip == "127.0.0.1" or ip.startswith("127.") or ip == "192.168.0.200":
             return {"control": 5011, "video": 5012, "video_control": 5014, "still": 6010, "heartbeat": 5013}
         else:
             return {"control": 5001, "video": 5002, "video_control": 5004, "still": 6000, "heartbeat": 5003}
