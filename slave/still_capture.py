@@ -115,6 +115,26 @@ ORIGINAL_DEFAULTS = {
     'rotation': 0
 }
 
+def get_real_local_ip():
+    """
+    Get the real network IP using 'ip addr show' instead of gethostbyname.
+    FIXED: gethostbyname returns 127.0.1.1 from /etc/hosts, causing wrong port selection.
+    """
+    try:
+        result = subprocess.run(['ip', 'addr', 'show'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            for line in result.stdout.split('\n'):
+                if 'inet 192.168.0.2' in line:
+                    parts = line.strip().split()
+                    for part in parts:
+                        if part.startswith('192.168.0.2') and '/' in part:
+                            return part.split('/')[0]
+    except Exception as e:
+        logging.warning(f"[STILL] IP detection failed: {e}")
+    
+    # Fallback to master IP (local camera)
+    return "192.168.0.200"
+
 def apply_all_transforms(image_array):
     """UNIFIED: Apply transforms using shared pipeline for consistency"""
     try:
@@ -428,7 +448,7 @@ def capture_still():
     try:
         # CRITICAL FIX: Aggressively stop video stream to prevent interference
         try:
-            local_ip = socket.gethostbyname(socket.gethostname())
+            local_ip = get_real_local_ip()
             ports = get_slave_ports(local_ip)
             video_control_port = ports.get('video_control', None)
             if video_control_port:
@@ -467,7 +487,7 @@ def capture_still():
             # Wait before restarting video to ensure still capture is complete
             time.sleep(2.0)
             
-            local_ip = socket.gethostbyname(socket.gethostname())
+            local_ip = get_real_local_ip()
             ports = get_slave_ports(local_ip)
             video_control_port = ports.get('video_control', None)
             if video_control_port:
@@ -481,7 +501,7 @@ def send_image(filename):
     """Send captured image to master via TCP"""
     try:
         # Get correct still port for this device (local=6010, remote=6000)
-        local_ip = socket.gethostbyname(socket.gethostname())
+        local_ip = get_real_local_ip()
         ports = get_slave_ports(local_ip)
         still_port = ports['still']
         
@@ -510,7 +530,7 @@ def handle_control_commands():
     
     try:
         # Get port for this device
-        ports = get_slave_ports(socket.gethostbyname(socket.gethostname()))
+        ports = get_slave_ports(get_real_local_ip())
         control_port = ports['control']
         
         sock.bind(("0.0.0.0", control_port))
@@ -532,7 +552,7 @@ def handle_control_commands():
                 restart_video_stream()
             elif command == "START_STREAM":
                 try:
-                    local_ip = socket.gethostbyname(socket.gethostname())
+                    local_ip = get_real_local_ip()
                     ports = get_slave_ports(local_ip)
                     video_control_port = ports.get('video_control', None)
                     if video_control_port:
@@ -543,7 +563,7 @@ def handle_control_commands():
                     logging.error(f"Error forwarding START_STREAM: {e}")
             elif command == "STOP_STREAM":
                 try:
-                    local_ip = socket.gethostbyname(socket.gethostname())
+                    local_ip = get_real_local_ip()
                     ports = get_slave_ports(local_ip)
                     video_control_port = ports.get('video_control', None)
                     if video_control_port:
@@ -585,7 +605,7 @@ def handle_control_commands():
             elif command in ("SHUTDOWN", "shutdown", "poweroff", "power off", "shut down"):
                 try:
                     # Attempt to stop stream first
-                    local_ip = socket.gethostbyname(socket.gethostname())
+                    local_ip = get_real_local_ip()
                     ports = get_slave_ports(local_ip)
                     video_control_port = ports.get('video_control', None)
                     if video_control_port:
@@ -598,7 +618,7 @@ def handle_control_commands():
                 break
             elif command in ("REBOOT", "reboot"):
                 try:
-                    local_ip = socket.gethostbyname(socket.gethostname())
+                    local_ip = get_real_local_ip()
                     ports = get_slave_ports(local_ip)
                     video_control_port = ports.get('video_control', None)
                     if video_control_port:
@@ -663,7 +683,7 @@ def handle_settings_package(command):
         forwarded = False
         for attempt in range(3):
             try:
-                local_ip = socket.gethostbyname(socket.gethostname())
+                local_ip = get_real_local_ip()
                 ports = get_slave_ports(local_ip)
                 video_control_port = ports.get('video_control', 5004)
                 
@@ -877,7 +897,7 @@ def restart_video_stream_with_new_settings():
     """Signal video stream to restart with new settings"""
     try:
         # Get local IP and ports
-        local_ip = socket.gethostbyname(socket.gethostname())
+        local_ip = get_real_local_ip()
         ports = get_slave_ports(local_ip)
         video_control_port = ports.get('video_control', None)
         
@@ -971,7 +991,7 @@ def factory_reset_with_video_forward():
     forwarded = False
     for attempt in range(3):
         try:
-            local_ip = socket.gethostbyname(socket.gethostname())
+            local_ip = get_real_local_ip()
             ports = get_slave_ports(local_ip)
             video_control_port = ports.get('video_control', 5004)
             
