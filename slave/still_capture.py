@@ -240,50 +240,70 @@ def capture_image():
         return None
 
 def capture_with_processing(filename):
-    """Capture image with full processing pipeline - SIMPLIFIED WORKING VERSION"""
-    try:
-        picam2 = Picamera2()
-        
-        # Configure for maximum resolution still - SIMPLE like working slave201
-        # FIXED: Add raw parameter to force full sensor usage (prevents letterboxing)
-        still_config = picam2.create_still_configuration(
-            main={"size": (4608, 2592)},  # Full sensor resolution
-            raw={"size": (4608, 2592)}    # Force full HQ sensor - prevents letterbox crop
-        )
-        picam2.configure(still_config)
-        picam2.start()
-        
-        # Let camera settle - SIMPLE timing like working slave201
-        time.sleep(1)
-        
-        # Capture full resolution image
-        image_array = picam2.capture_array()
-        
-        # Apply all transforms
-        processed_image = apply_all_transforms(image_array)
-        
-        # Save processed image - SIMPLE like working slave201
-        success = cv2.imwrite(filename, processed_image)
-        
-        picam2.stop()
-        picam2.close()
-        
-        if success and os.path.exists(filename):
-            logging.info(f"[SLAVE] Processed image saved: {filename}")
-            return filename
-        else:
-            logging.error("[SLAVE] Failed to save processed image")
-            return None
-            
-    except Exception as e:
-        logging.error(f"[SLAVE] Error in capture_with_processing: {e}")
+    """Capture image with full processing pipeline - WITH RETRY FOR CAMERA ACCESS"""
+    max_retries = 5
+    retry_delay = 2.0  # seconds between retries
+    
+    for attempt in range(max_retries):
         try:
-            if 'picam2' in locals():
-                picam2.stop()
-                picam2.close()
-        except:
-            pass
-        return None
+            logging.info(f"[SLAVE] Camera access attempt {attempt + 1}/{max_retries}")
+            picam2 = Picamera2()
+            
+            # Configure for maximum resolution still - SIMPLE like working slave201
+            # FIXED: Add raw parameter to force full sensor usage (prevents letterboxing)
+            still_config = picam2.create_still_configuration(
+                main={"size": (4608, 2592)},  # Full sensor resolution
+                raw={"size": (4608, 2592)}    # Force full HQ sensor - prevents letterbox crop
+            )
+            picam2.configure(still_config)
+            picam2.start()
+            
+            # Let camera settle - SIMPLE timing like working slave201
+            time.sleep(1)
+            
+            # Capture full resolution image
+            image_array = picam2.capture_array()
+            
+            # Apply all transforms
+            processed_image = apply_all_transforms(image_array)
+            
+            # Save processed image - SIMPLE like working slave201
+            success = cv2.imwrite(filename, processed_image)
+            
+            picam2.stop()
+            picam2.close()
+            
+            if success and os.path.exists(filename):
+                logging.info(f"[SLAVE] Processed image saved: {filename}")
+                return filename
+            else:
+                logging.error("[SLAVE] Failed to save processed image")
+                return None
+                
+        except Exception as e:
+            error_msg = str(e)
+            logging.warning(f"[SLAVE] Camera access attempt {attempt + 1} failed: {error_msg}")
+            
+            try:
+                if 'picam2' in locals():
+                    picam2.stop()
+                    picam2.close()
+            except:
+                pass
+            
+            # If camera busy, wait and retry
+            if "Pipeline handler in use" in error_msg or "Camera __init__" in error_msg:
+                if attempt < max_retries - 1:
+                    logging.info(f"[SLAVE] Camera busy, waiting {retry_delay}s before retry...")
+                    time.sleep(retry_delay)
+                    continue
+            else:
+                # Different error, don't retry
+                logging.error(f"[SLAVE] Error in capture_with_processing: {e}")
+                return None
+    
+    logging.error(f"[SLAVE] Failed to access camera after {max_retries} attempts")
+    return None
 
 def capture_with_libcamera(filename):
     """Standard capture using libcamera-still (no processing) - FIXED HIGH RESOLUTION"""
@@ -419,7 +439,7 @@ def capture_still():
                     logging.info(f"[SLAVE] Sent MULTIPLE STOP_STREAM commands to port {video_control_port}")
                 
                 # EXTENDED wait for video stream to completely stop
-                time.sleep(3.0)  # Increased from 1.5 seconds
+                time.sleep(5.0)  # Increased from 3.0 seconds
                 logging.info("[SLAVE] Extended wait for video stream to COMPLETELY stop")
         except Exception as e:
             logging.warning(f"[SLAVE] Unable to send STOP_STREAM before capture: {e}")
