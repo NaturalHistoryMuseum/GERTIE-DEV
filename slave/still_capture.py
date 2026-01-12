@@ -480,9 +480,15 @@ def capture_still():
 def send_image(filename):
     """Send captured image to master via TCP"""
     try:
+        # Get correct still port for this device (local=6010, remote=6000)
+        local_ip = socket.gethostbyname(socket.gethostname())
+        ports = get_slave_ports(local_ip)
+        still_port = ports['still']
+        
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.settimeout(30.0)
-            sock.connect((MASTER_IP, STILL_PORT))
+            sock.connect((MASTER_IP, still_port))
+            logging.info(f"[SLAVE] Connecting to {MASTER_IP}:{still_port} (local_ip={local_ip})")
             
             with open(filename, "rb") as f:
                 data = f.read()
