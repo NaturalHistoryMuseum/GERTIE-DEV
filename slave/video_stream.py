@@ -50,6 +50,7 @@ except ImportError as e:
 # Global variables
 streaming = False
 streaming_lock = threading.Lock()
+picam2_instance = None  # Global camera instance for force-release
 jpeg_quality = 35  # Balanced quality/size - improved from 10 (too low) but still UDP-safe (~8-12KB frames)
 
 def get_device_name_from_ip():
@@ -366,7 +367,9 @@ def start_stream():
 
     try:
         # Initialize camera
-        picam2 = Picamera2()
+        global picam2_instance
+        picam2_instance = Picamera2()
+        picam2 = picam2_instance  # Local alias for compatibility
         
         # Get configuration with separated concerns
         resolution = get_video_resolution(device_name)
@@ -472,8 +475,8 @@ def start_stream():
         logging.info(f"[VIDEO] Stream stopped for {device_name}")
 
 def stop_stream():
-    """Stop video streaming"""
-    global streaming
+    """Stop video streaming and release camera"""
+    global streaming, picam2_instance
     
     with streaming_lock:
         if not streaming:
@@ -481,7 +484,17 @@ def stop_stream():
             return
         streaming = False
     
-    logging.info("[VIDEO] Stream stop requested")
+    logging.info("[VIDEO] Stream stop requested - releasing camera...")
+    
+    # Force release camera immediately
+    try:
+        if 'picam2_instance' in globals() and picam2_instance is not None:
+            picam2_instance.stop()
+            picam2_instance.close()
+            picam2_instance = None
+            logging.info("[VIDEO] Camera forcefully released")
+    except Exception as e:
+        logging.warning(f"[VIDEO] Error releasing camera: {e}")
 
 def restart_stream():
     """Restart video stream with fresh settings"""
