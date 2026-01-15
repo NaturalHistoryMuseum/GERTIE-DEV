@@ -558,11 +558,11 @@ def send_local_image(filename):
     """Send local image to master GUI via TCP (same as working version)"""
     for attempt in range(3):
         try:
-            logging.info(f"[LOCAL] Uploading image to {MASTER_IP}:{STILL_PORT}... (attempt {attempt + 1}/3)")
+            logging.info(f"[LOCAL] Uploading image to {MASTER_IP}:{LOCAL_STILL_PORT}... (attempt {attempt + 1}/3)")
             
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(10.0)
-                s.connect((MASTER_IP, STILL_PORT))
+                s.connect((MASTER_IP, LOCAL_STILL_PORT))
                 
                 with open(filename, 'rb') as f:
                     data = f.read()
