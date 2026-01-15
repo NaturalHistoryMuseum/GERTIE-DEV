@@ -12,6 +12,33 @@ echo "========================================" >> "$LOG_FILE"
 echo "[$TIMESTAMP] GUI TESTING SESSION STARTED" >> "$LOG_FILE"
 echo "========================================" >> "$LOG_FILE"
 
+# ============================================
+# TIME SYNC: Sync all Pi clocks to control1
+# ============================================
+echo "[$TIMESTAMP] [INFO] Syncing time to all cameras..." >> "$LOG_FILE"
+echo "Syncing time to all cameras..."
+
+CONTROL1_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+echo "[$TIMESTAMP] [INFO] Control1 time: $CONTROL1_TIME" >> "$LOG_FILE"
+
+SYNC_SUCCESS=0
+SYNC_FAIL=0
+
+for ip in 201 202 203 204 205 206 207; do
+    SLAVE_NAME="rep$((ip - 200))"
+    if ssh -o ConnectTimeout=3 andrc1@192.168.0.$ip "sudo date -s '$CONTROL1_TIME'" > /dev/null 2>&1; then
+        echo "[$TIMESTAMP] [INFO] $SLAVE_NAME (192.168.0.$ip): Time synced ✓" >> "$LOG_FILE"
+        ((SYNC_SUCCESS++))
+    else
+        echo "[$TIMESTAMP] [WARN] $SLAVE_NAME (192.168.0.$ip): Time sync FAILED" >> "$LOG_FILE"
+        ((SYNC_FAIL++))
+    fi
+done
+
+echo "[$TIMESTAMP] [INFO] Time sync complete: $SYNC_SUCCESS success, $SYNC_FAIL failed" >> "$LOG_FILE"
+echo "Time sync complete: $SYNC_SUCCESS/7 cameras synced"
+echo "" >> "$LOG_FILE"
+
 # Capture system state before GUI launch
 echo "[$TIMESTAMP] [INFO] System state before GUI launch:" >> "$LOG_FILE"
 echo "[$TIMESTAMP] [INFO] Active services:" >> "$LOG_FILE"
