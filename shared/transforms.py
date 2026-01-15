@@ -33,10 +33,20 @@ DEFAULT_SETTINGS = {
 }
 
 def get_device_name_from_ip():
-    """Get device name from IP address"""
+    """Get device name from hostname first, then IP address as fallback"""
     try:
         import socket
         hostname = socket.gethostname()
+        
+        # PRIORITY 1: Check hostname directly (most reliable on Pi devices)
+        # Hostnames are set correctly as rep1-rep8
+        valid_hostnames = ["rep1", "rep2", "rep3", "rep4", "rep5", "rep6", "rep7", "rep8", "control1"]
+        if hostname in valid_hostnames:
+            device_name = hostname if hostname != "control1" else "rep8"
+            logging.info(f"[DEVICE] Using hostname directly: {hostname} → {device_name}")
+            return device_name
+        
+        # PRIORITY 2: Fallback to IP-based lookup
         local_ip = socket.gethostbyname(hostname)
         
         # Device mapping
@@ -54,7 +64,7 @@ def get_device_name_from_ip():
         }
         
         device_name = device_mapping.get(local_ip, "rep8")
-        logging.info(f"[DEVICE] {local_ip} → {device_name}")
+        logging.info(f"[DEVICE] IP lookup: {local_ip} → {device_name}")
         return device_name
             
     except Exception as e:
