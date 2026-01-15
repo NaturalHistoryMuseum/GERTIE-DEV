@@ -303,7 +303,7 @@ def start_local_video_stream():
                 
                 # Send to master GUI
                 try:
-                    sock.sendto(frame_data, (MASTER_IP, VIDEO_PORT))
+                    sock.sendto(frame_data, (MASTER_IP, LOCAL_VIDEO_PORT))
                     error_count = 0
                 except socket.timeout:
                     pass
