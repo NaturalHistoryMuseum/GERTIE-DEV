@@ -295,7 +295,16 @@ def capture_with_processing(filename):
             picam2.close()
             
             if success and os.path.exists(filename):
-                logging.info(f"[SLAVE] Processed image saved: {filename}")
+                file_size = os.path.getsize(filename)
+                img_shape = processed_image.shape if processed_image is not None else "None"
+                logging.info(f"[SLAVE] Processed image saved: {filename} (size={file_size} bytes, shape={img_shape})")
+                
+                # DIAGNOSTIC: Warn if file is suspiciously small (< 100KB for full res)
+                if file_size < 100000:
+                    logging.warning(f"[SLAVE] ⚠️ SMALL FILE WARNING: {filename} only {file_size} bytes - expected >1MB for 4608x2592")
+                    logging.warning(f"[SLAVE] Image array shape: {image_array.shape if image_array is not None else 'None'}")
+                    logging.warning(f"[SLAVE] Processed shape: {img_shape}")
+                
                 return filename
             else:
                 logging.error("[SLAVE] Failed to save processed image")
