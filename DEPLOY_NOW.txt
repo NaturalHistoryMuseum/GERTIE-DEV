@@ -1,132 +1,69 @@
 # DEPLOYMENT via sync_to_slaves.sh ONLY
 
-Date: 2025-11-11
+Date: 2026-01-15
 Commits: 
-  - d100864 Fix: Add raw sensor parameter to prevent letterbox cropping in still captures
-  - 1f59acd Sync: Add raw sensor parameter to still_capture_offline.py (prevents letterboxing)
-  - a826026 Fix: WYSIWYG crop scaling - scale crop coordinates from video resolution to still resolution
+  - 9e31dd1: Fix rep8 still capture port (6010 instead of 6000)
+  - 0a14cc2: Add diagnostic logging for rep3 small captures
 
-## TWO CRITICAL FIXES FOR IMAGE CAPTURE
+## MANDATORY STEPS (NO ALTERNATIVES):
 
-### FIX #1: LETTERBOX CROPPING RESOLVED
+1. Copy camera_system_integrated_final to USB:
+   ```
+   cp -r ~/Desktop/GERTIE_WORKSPACE/01_ACTIVE_PROJECTS/camera_system_integrated_final /Volumes/USB/
+   ```
 
-**Problem Fixed:**
-Final captured images had black bars (letterboxing) at top/bottom.
-
-**Root Cause:**
-- Picamera2 create_still_configuration() was missing `raw` parameter
-- Without explicit sensor config, Picamera2 auto-selected sensor mode
-- Auto-selected mode caused letterboxing when scaled to requested resolution
-
-**Solution Applied:**
-Added `raw={"size": (4608, 2592)}` to force full HQ sensor usage in:
-- slave/still_capture.py (line 247-252)
-- slave/still_capture_offline.py (line 311-316)
-
-This matches the working pattern from video_stream.py.
-
-### FIX #2: WYSIWYG CROP SYNCHRONIZATION
-
-**Problem Fixed:**
-Crop adjustments in video preview didn't match the crop in final captured still images.
-
-**Root Cause:**
-- Video stream preview: 640x480 resolution (user adjusts crop based on this)
-- Still capture: 4608x2592 resolution (full sensor)
-- Crop coordinates designed for 640x480 were applied directly to 4608x2592
-- Result: Wrong crop region in still images (not matching preview)
-
-**Solution Applied:**
-Added resolution-aware crop scaling in shared/transforms.py:
-- New function: apply_crop_scaled_for_still() (lines 231-283)
-- Calculates scale factors: X = 4608/640 = 7.2, Y = 2592/480 = 5.4
-- Scales crop coordinates proportionally before applying
-- Result: What you see in preview = what you get in capture (WYSIWYG)
-
-**Example:**
-- User sees crop at x=100, y=50, w=400, h=300 in 640x480 preview
-- System now scales to x=720, y=270, w=2880, h=1620 for 4608x2592 capture
-- Final image matches preview exactly
-
-## MANDATORY DEPLOYMENT STEPS (NO ALTERNATIVES):
-
-1. Copy camera_system_integrated_final to USB drive
-   
-2. On control1 Pi:
+2. On control1:
+   ```
    cp -r /media/USB/camera_system_integrated_final /home/andrc1/
-   
-3. Navigate to project:
    cd /home/andrc1/camera_system_integrated_final
-   
-4. Deploy to all cameras:
    ./sync_to_slaves.sh
-   
-5. Start system:
+   ```
+
+3. Restart local camera service (for rep8 fix):
+   ```
+   sudo systemctl restart local_camera_slave.service
+   ```
+
+4. Start GUI and test:
+   ```
    ./run_gui_with_logging.sh
-   
-6. Test BOTH fixes:
-   
-   **Test A - Letterboxing Fix:**
-   - Capture still images from multiple cameras
-   - Verify images are full frame (4608x2592)
-   - Verify NO letterboxing (no black bars)
-   - Check captured_images folder on each Pi
-   
-   **Test B - WYSIWYG Crop:**
-   - Enable crop in GUI
-   - Adjust crop rectangle in video preview
-   - Capture still image
-   - Verify captured image has EXACT same crop as preview
-   - Try different crop positions/sizes
-   
-7. Collect logs:
+   ```
+
+5. TEST CAPTURE - Press SPACE or C to capture all 8 cameras
+
+6. Check captured images:
+   ```
+   ls -la ~/Desktop/captured_images/
+   ```
+
+7. Check rep3 logs if small file:
+   ```
+   ssh rep3 "journalctl -u still_capture.service -n 30 --no-pager"
+   ```
+
+8. Copy log back:
+   ```
    cp /home/andrc1/Desktop/updatelog.txt /media/USB/
-   
-8. Return updatelog.txt to MacBook for analysis
+   ```
 
-## Expected Results:
+## EXPECTED RESULTS:
 
-**Letterboxing Fix:**
-- Still captures use full sensor (4608x2592)
-- No letterboxing or black bars
-- Images fill entire frame
-- All 8 cameras capture correctly
+✅ rep8 (local camera) should now send hi-res captures (was broken - sent to wrong port)
+✅ rep1, rep2, rep4, rep5, rep6, rep7 should continue working (~1.7MB each)
+⚠️ rep3 may still have small captures - check logs for "SMALL FILE WARNING"
 
-**WYSIWYG Crop:**
-- Preview shows exact crop that will be captured
-- Crop coordinates scale properly from video to still resolution
-- What you see = what you get (WYSIWYG)
-- Consistent cropping across all cameras
+## DIAGNOSTIC OUTPUT TO LOOK FOR:
 
-## Technical Details:
+If rep3 produces small file, logs will show:
+```
+[SLAVE] ⚠️ SMALL FILE WARNING: filename only XXXX bytes - expected >1MB
+[SLAVE] Image array shape: (height, width, channels)
+[SLAVE] Processed shape: (height, width, channels)
+```
 
-**Fix #1 (Letterboxing):**
-Before:
-  still_config = picam2.create_still_configuration(
-      main={"size": (4608, 2592)}
-  )
-
-After:
-  still_config = picam2.create_still_configuration(
-      main={"size": (4608, 2592)},
-      raw={"size": (4608, 2592)}  # Force full sensor
-  )
-
-**Fix #2 (WYSIWYG Crop):**
-Before:
-  # Applied video crop coords directly to still (WRONG!)
-  image = apply_crop_rgb(image, settings)
-
-After:
-  # Scale crop coordinates for resolution difference
-  scale_x = still_width / video_width  # e.g., 4608/640 = 7.2
-  scale_y = still_height / video_height  # e.g., 2592/480 = 5.4
-  scaled_x = crop_x * scale_x
-  scaled_y = crop_y * scale_y
-  # ... apply scaled crop
+This tells us if the camera is returning a small image or if processing is shrinking it.
 
 ## DO NOT:
 - Use any other deployment method
-- Run individual scp commands  
+- Run individual scp commands
 - Modify sync_to_slaves.sh
-- Skip testing steps (both fixes need verification)
