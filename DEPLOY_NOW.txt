@@ -1,69 +1,47 @@
 # DEPLOYMENT via sync_to_slaves.sh ONLY
 
 Date: 2026-01-15
-Commits: 
-  - 9e31dd1: Fix rep8 still capture port (6010 instead of 6000)
-  - 0a14cc2: Add diagnostic logging for rep3 small captures
+Commit: 7d3c16d Fix: Use LOCAL_VIDEO_PORT (5012) for local camera video stream
+
+## WHAT THIS FIXES:
+rep8 local camera video not displaying in GUI
+- Before: Video sent to port 5002 (wrong - remote cameras only)
+- After: Video sent to port 5012 (correct - local camera port)
 
 ## MANDATORY STEPS (NO ALTERNATIVES):
 
-1. Copy camera_system_integrated_final to USB:
-   ```
-   cp -r ~/Desktop/GERTIE_WORKSPACE/01_ACTIVE_PROJECTS/camera_system_integrated_final /Volumes/USB/
-   ```
+1. Eject USB safely from MacBook
 
 2. On control1:
    ```
    cp -r /media/USB/camera_system_integrated_final /home/andrc1/
    cd /home/andrc1/camera_system_integrated_final
    ./sync_to_slaves.sh
-   ```
-
-3. Restart local camera service (for rep8 fix):
-   ```
    sudo systemctl restart local_camera_slave.service
    ```
 
-4. Start GUI and test:
+3. Test (IMPORTANT - run from correct directory!):
    ```
+   cd /home/andrc1/camera_system_integrated_final
    ./run_gui_with_logging.sh
    ```
+   NOT from camera_system_qt_conversion!
 
-5. TEST CAPTURE - Press SPACE or C to capture all 8 cameras
+4. Press M for Real Network mode
+5. Verify ALL 8 cameras show video: [1, 2, 3, 4, 5, 6, 7, 8]
+6. Press C to capture - verify rep8 hi-res received
 
-6. Check captured images:
-   ```
-   ls -la ~/Desktop/captured_images/
-   ```
-
-7. Check rep3 logs if small file:
-   ```
-   ssh rep3 "journalctl -u still_capture.service -n 30 --no-pager"
-   ```
-
-8. Copy log back:
+7. Return logs:
    ```
    cp /home/andrc1/Desktop/updatelog.txt /media/USB/
    ```
 
-## EXPECTED RESULTS:
-
-✅ rep8 (local camera) should now send hi-res captures (was broken - sent to wrong port)
-✅ rep1, rep2, rep4, rep5, rep6, rep7 should continue working (~1.7MB each)
-⚠️ rep3 may still have small captures - check logs for "SMALL FILE WARNING"
-
-## DIAGNOSTIC OUTPUT TO LOOK FOR:
-
-If rep3 produces small file, logs will show:
-```
-[SLAVE] ⚠️ SMALL FILE WARNING: filename only XXXX bytes - expected >1MB
-[SLAVE] Image array shape: (height, width, channels)
-[SLAVE] Processed shape: (height, width, channels)
-```
-
-This tells us if the camera is returning a small image or if processing is shrinking it.
+## EXPECTED RESULT:
+- "First frame from 192.168.0.200 (camera 8)" in network logs
+- "8 cameras have frames: [1, 2, 3, 4, 5, 6, 7, 8]" in GUI output
+- rep8 video displays in GUI grid position 8
 
 ## DO NOT:
-- Use any other deployment method
-- Run individual scp commands
-- Modify sync_to_slaves.sh
+- Run from camera_system_qt_conversion (that's the OLD project!)
+- Use any deployment method other than sync_to_slaves.sh
+- Skip restarting local_camera_slave.service

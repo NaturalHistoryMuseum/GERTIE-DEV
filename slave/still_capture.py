@@ -76,15 +76,15 @@ camera_settings = {
     'exposure_mode': 'auto',    # auto/manual/night/etc
     'jpeg_quality': 95,         # Keep high quality for stills 
     'fps': 30,                  # frame rate
-    'resolution': '4608x2592',  # Keep explicit high resolution
+    'resolution': '4056x3040',  # 4:3 full HQ sensor (NOT 4608x2592 which is 16:9 crop!)
     'image_format': 'JPEG',     # JPEG/PNG/BMP/TIFF
     
     # Transform settings (NEW - universal for all cameras)
     'crop_enabled': False,
     'crop_x': 0,
     'crop_y': 0,
-    'crop_width': 4608,         # Full sensor width
-    'crop_height': 2592,        # Full sensor height
+    'crop_width': 4056,         # Full 4:3 sensor width
+    'crop_height': 3040,        # Full 4:3 sensor height
     'flip_horizontal': False,
     'flip_vertical': False,
     'grayscale': False,
@@ -102,13 +102,13 @@ ORIGINAL_DEFAULTS = {
     'exposure_mode': 'auto',
     'jpeg_quality': 95,         # Keep high quality
     'fps': 30,
-    'resolution': '4608x2592',  # Keep explicit high resolution
+    'resolution': '4056x3040',  # 4:3 full HQ sensor (NOT 4608x2592 which is 16:9 crop!)
     'image_format': 'JPEG',
     'crop_enabled': False,
     'crop_x': 0,
     'crop_y': 0,
-    'crop_width': 4608,
-    'crop_height': 2592,
+    'crop_width': 4056,
+    'crop_height': 3040,
     'flip_horizontal': False,
     'flip_vertical': False,
     'grayscale': False,
@@ -273,8 +273,7 @@ def capture_with_processing(filename):
             # Configure for maximum resolution still - SIMPLE like working slave201
             # FIXED: Add raw parameter to force full sensor usage (prevents letterboxing)
             still_config = picam2.create_still_configuration(
-                main={"size": (4608, 2592)},  # Full sensor resolution
-                raw={"size": (4608, 2592)}    # Force full HQ sensor - prevents letterbox crop
+                main={"size": (4056, 3040)}   # Full 4:3 HQ sensor resolution
             )
             picam2.configure(still_config)
             picam2.start()
@@ -301,7 +300,7 @@ def capture_with_processing(filename):
                 
                 # DIAGNOSTIC: Warn if file is suspiciously small (< 100KB for full res)
                 if file_size < 100000:
-                    logging.warning(f"[SLAVE] ⚠️ SMALL FILE WARNING: {filename} only {file_size} bytes - expected >1MB for 4608x2592")
+                    logging.warning(f"[SLAVE] ⚠️ SMALL FILE WARNING: {filename} only {file_size} bytes - expected >1MB for 4056x3040")
                     logging.warning(f"[SLAVE] Image array shape: {image_array.shape if image_array is not None else 'None'}")
                     logging.warning(f"[SLAVE] Processed shape: {img_shape}")
                 
